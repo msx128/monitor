@@ -8,10 +8,10 @@ pub async fn run() {
     println!("Starting...");
     let state = init();
 
-    create_cpu_update_thread(&state, "cpu_info", None);
-    create_memory_update_thread(&state, "mem_info", None);
-    create_disk_update_thread(&state, "disk_info", None);
-    create_network_update_thread(&state, "network_info", None);
+    CpuUsageInfo::spawn(&state, "cpu_info", None);
+    NetworkInfo::spawn(&state, "network_info", None);
+    MemoryUsageInfo::spawn(&state, "mem_info", None);
+    DisksInfo::spawn(&state, "disk_info", None);
 
     tokio::signal::ctrl_c()
         .await
@@ -39,15 +39,4 @@ fn init() -> State {
     State {
         inner: Arc::new(state),
     }
-}
-
-pub struct InnerState {
-    pub client: Arc<Client>,
-    pub sys: Arc<Mutex<System>>,
-    pub disks: Arc<Mutex<Disks>>,
-    pub networks: Arc<Mutex<Networks>>,
-}
-
-pub struct State {
-    pub inner: Arc<InnerState>,
 }

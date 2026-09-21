@@ -1,15 +1,27 @@
-use crate::startup::State;
+use anyhow::Result;
+use reqwest::Client;
+use reqwest::Response;
 use serde::Serialize;
 use std::env;
+use std::sync::Arc;
+use sysinfo::Disks;
+use sysinfo::Networks;
+use sysinfo::System;
+use tokio::sync::Mutex;
 use tokio::time::{Duration, interval};
+
 // maybe make it udp
-pub async fn push_message(client: &reqwest::Client, message: impl Serialize, endpoint: &str) {
-    let _response = client
+pub async fn push_message(
+    client: &reqwest::Client,
+    message: impl Serialize,
+    endpoint: &str,
+) -> Result<Response> {
+    let response = client
         .post(&format!("{}{}", get_base_url(), endpoint))
         .json(&message)
         .send()
-        .await
-        .expect("Failed to send POST request");
+        .await?;
+    Ok(response)
 }
 
 fn get_base_url() -> String {
@@ -53,7 +65,25 @@ pub fn create_metric_update_thread<T, F>(
             };
 
             println!("pushing {}!", &endpoint);
-            push_message(&client, metric, &endpoint).await;
+            let _ = match push_message(&client, metric, &endpoint).await {
+                Err(e) => eprintln!("Failed to push from network: {e}"),
+                Ok(_) => (),
+            };
         }
     });
+}
+
+pub struct InnerState {
+    pub client: Arc<Client>,
+    pub sys: Arc<Mutex<System>>,
+    pub disks: Arc<Mutex<Disks>>,
+    pub networks: Arc<Mutex<Networks>>,
+}
+
+pub struct State {
+    pub inner: Arc<InnerState>,
+}
+
+pub trait Update {
+    fn spawn(_state: &State, _endpoint: &str, _inter: Option<Duration>) {}
 }

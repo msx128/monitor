@@ -1,5 +1,6 @@
+use crate::refresh::inner::State;
+use crate::refresh::inner::Update;
 use crate::refresh::inner::{get_timestamp, push_message};
-use crate::startup::State;
 use serde::Serialize;
 use std::sync::Arc;
 use sysinfo::DiskKind;
@@ -7,14 +8,27 @@ use sysinfo::Disks;
 use tokio::sync::Mutex;
 use tokio::time::{Duration, interval};
 
+fn serialize_disk_kind<S>(kind: &DiskKind, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let kind_str = match kind {
+        DiskKind::HDD => "HDD",
+        DiskKind::SSD => "SSD",
+        DiskKind::Unknown(_) => "UNKNOWN",
+    };
+    kind_str.serialize(serializer)
+}
+
 #[derive(Serialize, Debug)]
-struct DisksInfo {
+pub struct DisksInfo {
     disks: Vec<DiskInfo>,
 }
 
 #[derive(Serialize, Debug)]
 struct DiskInfo {
     timestamp: u64,
+    #[serde(serialize_with = "serialize_disk_kind")]
     kind: DiskKind,
     name: String,
     total: u64,
@@ -22,29 +36,34 @@ struct DiskInfo {
     used: u64,
 }
 
-pub fn create_disk_update_thread(state: &State, endpoint: &str, inter: Option<Duration>) {
-    let state_ark = state.inner.clone();
+impl Update for DisksInfo {
+    fn spawn(state: &State, endpoint: &str, inter: Option<Duration>) {
+        let state_ark = state.inner.clone();
 
-    let client = state_ark.client.clone();
-    let disks = state_ark.disks.clone();
-    let endpoint = endpoint.to_string();
+        let client = state_ark.client.clone();
+        let disks = state_ark.disks.clone();
+        let endpoint = endpoint.to_string();
 
-    let mut inter = interval(inter.unwrap_or(Duration::from_mins(30)));
+        let mut inter = interval(inter.unwrap_or(Duration::from_mins(30)));
 
-    tokio::spawn(async move {
-        let mut first = true;
-        loop {
-            if !first {
-                inter.tick().await;
+        tokio::spawn(async move {
+            let mut first = true;
+            loop {
+                if !first {
+                    inter.tick().await;
+                }
+
+                let metric = get_disks_metric(&disks).await;
+
+                println!("pushing {}!", &endpoint);
+                let _ = match push_message(&client, metric, &endpoint).await {
+                    Err(e) => eprintln!("Failed to push from network: {e}"),
+                    Ok(_) => (),
+                };
+                first = false;
             }
-
-            let metric = get_disks_metric(&disks).await;
-
-            println!("pushing {}!", &endpoint);
-            push_message(&client, metric, &endpoint).await;
-            first = false;
-        }
-    });
+        });
+    }
 }
 
 async fn get_disks_metric(disks: &Arc<Mutex<Disks>>) -> DisksInfo {

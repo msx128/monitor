@@ -1,57 +1,78 @@
+use crate::refresh::inner::State;
+use crate::refresh::inner::Update;
 use crate::refresh::inner::{get_timestamp, push_message};
-use crate::startup::State;
 use serde::Serialize;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use sysinfo::{NetworkData, Networks};
+use sysinfo::Networks;
 use tokio::time::{Duration, interval};
 
 #[derive(Serialize, Debug)]
-struct NetworkInfo {
+pub struct NetworkInfo {
     timestamp: u64,
     name: String,
-    recieved: u64,
+    received: u64,
     transmited: u64,
 }
 
-pub fn create_network_update_thread(state: &State, endpoint: &str, inter: Option<Duration>) {
-    let state_ark = state.inner.clone();
-    let client = state_ark.client.clone();
-    let endpoint = endpoint.to_string();
-    let mut inter = interval(inter.unwrap_or(Duration::from_secs(1)));
-    let networks = state_ark.networks.clone();
+impl Update for NetworkInfo {
+    fn spawn(state: &State, endpoint: &str, inter: Option<Duration>) {
+        let state_ark = state.inner.clone();
+        let client = state_ark.client.clone();
+        let endpoint = endpoint.to_string();
+        let mut inter = interval(inter.unwrap_or(Duration::from_secs(1)));
+        let networks = state_ark.networks.clone();
 
-    tokio::spawn(async move {
-        let network_name = {
-            let binding = networks.lock().await;
-            find_main_network(&binding).0.clone()
-        };
-        loop {
-            inter.tick().await;
+        tokio::spawn(async move {
+            loop {
+                inter.tick().await;
 
-            let metric = {
-                let mut networks_lock = networks.lock().await;
-                networks_lock.refresh(true);
-                get_network_metric(&*networks_lock, &network_name)
-            };
+                let metric = {
+                    let mut networks_lock = networks.lock().await;
+                    networks_lock.refresh(true);
+                    let network_name = find_main_network(&networks_lock);
+                    get_network_metric(&*networks_lock, &network_name)
+                };
 
-            println!("pushing {}!", &endpoint);
-            push_message(&client, metric, &endpoint).await;
-        }
-    });
-}
+                let metric = match metric {
+                    None => {
+                        eprintln!("Failed to get metric");
+                        continue;
+                    }
+                    Some(v) => v,
+                };
 
-fn get_network_metric(networks_lock: &Networks, network_name: &String) -> NetworkInfo {
-    let network = networks_lock.get(network_name).expect("Network gone :(");
-    NetworkInfo {
-        timestamp: get_timestamp(),
-        name: network_name.to_string(),
-        recieved: network.received(),
-        transmited: network.transmitted(),
+                println!("pushing {}!", &endpoint);
+                let _ = match push_message(&client, metric, &endpoint).await {
+                    Err(e) => eprintln!("Failed to push from network: {e}"),
+                    Ok(_) => (),
+                };
+            }
+        });
     }
 }
 
-fn find_main_network(networks: &Networks) -> (&String, &NetworkData) {
-    networks
+fn get_network_metric(
+    networks_lock: &Networks,
+    network_name: &Option<&String>,
+) -> Option<NetworkInfo> {
+    let network_name = match network_name {
+        None => return None,
+        Some(v) => v,
+    };
+    let network = match networks_lock.get(&network_name.to_string()) {
+        None => return None,
+        Some(v) => v,
+    };
+    Some(NetworkInfo {
+        timestamp: get_timestamp(),
+        name: network_name.to_string(),
+        received: network.received(),
+        transmited: network.transmitted(),
+    })
+}
+
+fn find_main_network(networks: &Networks) -> Option<&String> {
+    match networks
         .iter()
         .filter(|(_k, v)| match v.operational_state() {
             sysinfo::InterfaceOperationalState::Up => true,
@@ -67,5 +88,11 @@ fn find_main_network(networks: &Networks) -> (&String, &NetworkData) {
                 LOCALHOST_V6 => false,
                 _ => true
             }
-        }).next().expect("Failed to find network")
+        }).next() {
+            Some(res) => Some(res.0),
+            None => {
+                eprintln!("Failed to find network");
+                None
+            },
+    }
 }
