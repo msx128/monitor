@@ -41,6 +41,8 @@ impl Update for NetworkInfo {
                     Some(v) => v,
                 };
 
+                println!("{:?}", metric);
+
                 println!("pushing {}!", &endpoint);
                 let _ = match push_message(&client, metric, &endpoint).await {
                     Err(e) => eprintln!("Failed to push from network: {e}"),

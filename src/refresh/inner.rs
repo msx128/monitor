@@ -26,7 +26,7 @@ pub async fn push_message(
 
 fn get_base_url() -> String {
     match env::var("BASE_URL") {
-        Err(_) => "http://localhost:8000/api/v1/".to_string(),
+        Err(_) => "http://localhost:9090/api/v1/".to_string(),
         Ok(s) => s,
     }
 }
@@ -38,14 +38,14 @@ pub fn get_timestamp() -> u64 {
         .as_secs() as u64
 }
 
-pub fn create_metric_update_thread<T, F>(
+pub fn create_system_metric_update_thread<T, F>(
     state: &State,
     endpoint: &str,
     inter: Option<Duration>,
     mut metric_fn: F,
 ) where
     F: FnMut(&mut sysinfo::System) -> T + Send + 'static,
-    T: Serialize + Send + 'static,
+    T: Serialize + Send + 'static + std::fmt::Debug,
 {
     let state_arc = state.inner.clone();
 
@@ -63,6 +63,8 @@ pub fn create_metric_update_thread<T, F>(
                 let mut sys_guard = sys.lock().await;
                 metric_fn(&mut sys_guard)
             };
+
+            println!("{:?}", metric);
 
             println!("pushing {}!", &endpoint);
             let _ = match push_message(&client, metric, &endpoint).await {

@@ -1,6 +1,6 @@
 use crate::refresh::Update;
 use crate::refresh::inner::State;
-use crate::refresh::inner::{create_metric_update_thread, get_timestamp};
+use crate::refresh::inner::{create_system_metric_update_thread, get_timestamp};
 use serde::Serialize;
 use sysinfo::System;
 use tokio::time::Duration;
@@ -14,7 +14,7 @@ pub struct MemoryUsageInfo {
 
 impl Update for MemoryUsageInfo {
     fn spawn(state: &State, endpoint: &str, inter: Option<Duration>) {
-        create_metric_update_thread(state, endpoint, inter, create_memory_metric);
+        create_system_metric_update_thread(state, endpoint, inter, create_memory_metric);
     }
 }
 

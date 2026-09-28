@@ -15,7 +15,7 @@ where
     let kind_str = match kind {
         DiskKind::HDD => "HDD",
         DiskKind::SSD => "SSD",
-        DiskKind::Unknown(_) => "UNKNOWN",
+        DiskKind::Unknown(_) => unreachable!("unknown kinds are skipped"),
     };
     kind_str.serialize(serializer)
 }
@@ -55,6 +55,8 @@ impl Update for DisksInfo {
 
                 let metric = get_disks_metric(&disks).await;
 
+                println!("{:?}", metric);
+
                 println!("pushing {}!", &endpoint);
                 let _ = match push_message(&client, metric, &endpoint).await {
                     Err(e) => eprintln!("Failed to push from network: {e}"),
@@ -73,6 +75,9 @@ async fn get_disks_metric(disks: &Arc<Mutex<Disks>>) -> DisksInfo {
     let mut batch: Vec<DiskInfo> = Vec::with_capacity(1);
 
     for disk in disks_lock.iter() {
+        if matches!(disk.kind(), DiskKind::Unknown(_)) {
+            continue;
+        }
         let total = disk.total_space();
         let available = disk.available_space();
 

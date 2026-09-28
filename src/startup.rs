@@ -1,17 +1,43 @@
-use crate::refresh::*;
+use crate::{refresh::*, server::start_server};
 use reqwest::Client;
+use std::env;
 use std::sync::Arc;
+use std::time::Duration;
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System};
 use tokio::sync::Mutex;
+
+fn get_env_var(key: &str) -> Option<Duration> {
+    match env::var(key) {
+        Ok(v) => {
+            let time: u64 = match v.parse() {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!(
+                        "Error: while passing env: wrong value format it interval variable: {}",
+                        e
+                    );
+                    return None;
+                }
+            };
+            Some(Duration::from_secs(time))
+        }
+        Err(e) => {
+            eprintln!("Error: while passing env: {}", e);
+            None
+        }
+    }
+}
 
 pub async fn run() {
     println!("Starting...");
     let state = init();
 
-    CpuUsageInfo::spawn(&state, "cpu_info", None);
-    NetworkInfo::spawn(&state, "network_info", None);
-    MemoryUsageInfo::spawn(&state, "mem_info", None);
-    DisksInfo::spawn(&state, "disk_info", None);
+    start_server();
+
+    CpuUsageInfo::spawn(&state, "cpu_info", get_env_var("CPU_INTERVAL"));
+    NetworkInfo::spawn(&state, "network_info", get_env_var("NETWORK_INTERVAL"));
+    MemoryUsageInfo::spawn(&state, "mem_info", get_env_var("MEM_INTERVAL"));
+    DisksInfo::spawn(&state, "disk_info", get_env_var("DISK_INTERVAL"));
 
     tokio::signal::ctrl_c()
         .await
