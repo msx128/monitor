@@ -1,16 +1,19 @@
+use crate::refresh::Metric;
 use anyhow::Result;
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::mpsc};
 
-async fn server() -> Result<()> {
+pub async fn server(mut rx: mpsc::Receiver<Metric>) -> Result<()> {
     // change localhost to 0.0.0.0
-    let listener = TcpListener::bind("127.0.0.1:9090").await?;
 
-    loop {
-        let (socket, _) = listener.accept().await?;
-        println!("Connected! {:?}", socket);
+    while let Some(v) = rx.recv().await {
+        println!("{:?}", v);
     }
-}
 
-pub fn start_server() {
-    tokio::spawn(server());
+    // let listener = TcpListener::bind("127.0.0.1:9090").await?;
+
+    // loop {
+    //     let (socket, _) = listener.accept().await?;
+    //     println!("Connected! {:?}", socket);
+    // }
+    Ok(())
 }

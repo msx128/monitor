@@ -1,12 +1,14 @@
+use crate::refresh::Metric;
 use crate::refresh::inner::State;
 use crate::refresh::inner::Update;
-use crate::refresh::inner::{get_timestamp, push_message};
+use crate::refresh::inner::get_timestamp;
 use serde::Serialize;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use sysinfo::Networks;
+use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct NetworkInfo {
     timestamp: u64,
     name: String,
@@ -15,10 +17,8 @@ pub struct NetworkInfo {
 }
 
 impl Update for NetworkInfo {
-    fn spawn(state: &State, endpoint: &str, inter: Option<Duration>) {
+    fn spawn(state: &State, inter: Option<Duration>, tx: mpsc::Sender<Metric>) {
         let state_ark = state.inner.clone();
-        let client = state_ark.client.clone();
-        let endpoint = endpoint.to_string();
         let mut inter = interval(inter.unwrap_or(Duration::from_secs(1)));
         let networks = state_ark.networks.clone();
 
@@ -43,11 +43,9 @@ impl Update for NetworkInfo {
 
                 println!("{:?}", metric);
 
-                println!("pushing {}!", &endpoint);
-                let _ = match push_message(&client, metric, &endpoint).await {
-                    Err(e) => eprintln!("Failed to push from network: {e}"),
-                    Ok(_) => (),
-                };
+                tx.send(Metric::Network(metric.clone()))
+                    .await
+                    .expect("Change this later");
             }
         });
     }

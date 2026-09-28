@@ -1,35 +1,11 @@
-use anyhow::Result;
-use reqwest::Client;
-use reqwest::Response;
-use serde::Serialize;
-use std::env;
+use crate::refresh::Metric;
 use std::sync::Arc;
 use sysinfo::Disks;
 use sysinfo::Networks;
 use sysinfo::System;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
-
-// maybe make it udp
-pub async fn push_message(
-    client: &reqwest::Client,
-    message: impl Serialize,
-    endpoint: &str,
-) -> Result<Response> {
-    let response = client
-        .post(&format!("{}{}", get_base_url(), endpoint))
-        .json(&message)
-        .send()
-        .await?;
-    Ok(response)
-}
-
-fn get_base_url() -> String {
-    match env::var("BASE_URL") {
-        Err(_) => "http://localhost:9090/api/v1/".to_string(),
-        Ok(s) => s,
-    }
-}
 
 pub fn get_timestamp() -> u64 {
     std::time::SystemTime::now()
@@ -38,21 +14,16 @@ pub fn get_timestamp() -> u64 {
         .as_secs() as u64
 }
 
-pub fn create_system_metric_update_thread<T, F>(
+pub fn create_system_metric_update_thread<F>(
     state: &State,
-    endpoint: &str,
     inter: Option<Duration>,
     mut metric_fn: F,
+    tx: mpsc::Sender<Metric>,
 ) where
-    F: FnMut(&mut sysinfo::System) -> T + Send + 'static,
-    T: Serialize + Send + 'static + std::fmt::Debug,
+    F: FnMut(&mut sysinfo::System) -> Metric + Send + 'static,
 {
     let state_arc = state.inner.clone();
-
-    let client = state_arc.client.clone();
     let sys = state_arc.sys.clone();
-    let endpoint = endpoint.to_string();
-
     let mut inter = interval(inter.unwrap_or(Duration::from_secs(1)));
 
     tokio::spawn(async move {
@@ -65,18 +36,12 @@ pub fn create_system_metric_update_thread<T, F>(
             };
 
             println!("{:?}", metric);
-
-            println!("pushing {}!", &endpoint);
-            let _ = match push_message(&client, metric, &endpoint).await {
-                Err(e) => eprintln!("Failed to push from network: {e}"),
-                Ok(_) => (),
-            };
+            tx.send(metric.clone()).await.expect("Change this later");
         }
     });
 }
 
 pub struct InnerState {
-    pub client: Arc<Client>,
     pub sys: Arc<Mutex<System>>,
     pub disks: Arc<Mutex<Disks>>,
     pub networks: Arc<Mutex<Networks>>,
@@ -87,5 +52,5 @@ pub struct State {
 }
 
 pub trait Update {
-    fn spawn(_state: &State, _endpoint: &str, _inter: Option<Duration>) {}
+    fn spawn(_state: &State, _inter: Option<Duration>, _tx: mpsc::Sender<Metric>) {}
 }
