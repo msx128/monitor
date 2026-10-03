@@ -35,7 +35,7 @@ pub fn create_system_metric_update_thread<F>(
                 metric_fn(&mut sys_guard)
             };
 
-            println!("{:?}", metric);
+            // println!("{:?}", metric);
             tx.send(metric.clone()).await.expect("Change this later");
         }
     });

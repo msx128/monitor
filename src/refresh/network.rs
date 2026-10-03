@@ -16,6 +16,16 @@ pub struct NetworkInfo {
     transmited: u64,
 }
 
+impl NetworkInfo {
+    pub fn get_transmited(&self) -> u64 {
+        self.transmited
+    }
+
+    pub fn get_received(&self) -> u64 {
+        self.received
+    }
+}
+
 impl Update for NetworkInfo {
     fn spawn(state: &State, inter: Option<Duration>, tx: mpsc::Sender<Metric>) {
         let state_ark = state.inner.clone();
@@ -41,7 +51,7 @@ impl Update for NetworkInfo {
                     Some(v) => v,
                 };
 
-                println!("{:?}", metric);
+                // println!("{:?}", metric);
 
                 tx.send(Metric::Network(metric.clone()))
                     .await

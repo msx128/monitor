@@ -27,6 +27,17 @@ pub struct DisksInfo {
     disks: Vec<DiskInfo>,
 }
 
+// change this later
+impl DisksInfo {
+    pub fn get_avail(&self) -> u64 {
+        self.disks.iter().next().unwrap().available
+    }
+
+    pub fn get_total(&self) -> u64 {
+        self.disks.iter().next().unwrap().total
+    }
+}
+
 #[derive(Serialize, Debug, Clone)]
 struct DiskInfo {
     timestamp: u64,
@@ -53,7 +64,7 @@ impl Update for DisksInfo {
 
                 let metric = get_disks_metric(&disks).await;
 
-                println!("{:?}", metric);
+                // println!("{:?}", metric);
                 tx.send(Metric::Disk(metric.clone()))
                     .await
                     .expect("Change this later");

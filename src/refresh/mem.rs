@@ -9,8 +9,18 @@ use tokio::time::Duration;
 #[derive(Serialize, Debug, Clone)]
 pub struct MemoryUsageInfo {
     timestamp: u64,
-    used: u64,
+    available: u64,
     total: u64,
+}
+
+impl MemoryUsageInfo {
+    pub fn get_total(&self) -> u64 {
+        self.total
+    }
+
+    pub fn get_available(&self) -> u64 {
+        self.available
+    }
 }
 
 impl Update for MemoryUsageInfo {
@@ -24,7 +34,7 @@ fn create_memory_metric(sys: &mut System) -> Metric {
 
     let mem = MemoryUsageInfo {
         timestamp: get_timestamp(),
-        used: sys.used_memory(),
+        available: sys.available_memory(),
         total: sys.total_memory(),
     };
 

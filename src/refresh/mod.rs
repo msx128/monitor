@@ -5,7 +5,7 @@ mod mem;
 mod metric_enum;
 mod network;
 
-pub use cpu::CpuUsageInfo;
+pub use cpu::*;
 pub use disk::DisksInfo;
 pub use inner::InnerState;
 pub use inner::State;
