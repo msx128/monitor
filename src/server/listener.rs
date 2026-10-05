@@ -86,6 +86,9 @@ pub async fn listener(w_rx: watch::Receiver<Snapshot>) -> Result<(), std::io::Er
                     "encoding to openmetrics format error",
                 )
             })?;
+            // to handle this in other way we could used
+            // Box<dyn Error>, but it allocates redudant space and complexity
+            // so same as it there is anyhow, but it external dependency for one line of code so
 
             let response = format!(
                 "HTTP/1.1 200 OK\r\n\

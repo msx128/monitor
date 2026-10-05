@@ -6,6 +6,8 @@ use std::time::Duration;
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System};
 use tokio::sync::{Mutex, mpsc};
 
+// env funcitions used only once so I don't think that possiblity
+// of repeated loading is a problem(because there is no any)
 fn get_env_duration_var(key: &str) -> Option<Duration> {
     match env::var(key) {
         Ok(v) => {
@@ -37,6 +39,7 @@ fn is_debug() -> bool {
             } else {
                 true
             } // some strange logic but idk
+            // nah it's fine
         }
         Err(e) => {
             eprintln!(
