@@ -1,14 +1,12 @@
 use crate::refresh::inner::State;
-use crate::refresh::inner::{create_system_metric_update_thread, get_timestamp};
+use crate::refresh::inner::create_system_metric_update_thread;
 use crate::refresh::{Metric, Update};
-use serde::Serialize;
 use sysinfo::{MINIMUM_CPU_UPDATE_INTERVAL, System};
 use tokio::sync::mpsc;
 use tokio::time::Duration;
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct CpuUsageInfo {
-    timestamp: u64,
     cpu_usage: Vec<f32>,
 }
 
@@ -33,7 +31,6 @@ fn create_cpu_metric(sys: &mut System) -> Metric {
     sys.refresh_cpu_usage();
 
     let cpu = CpuUsageInfo {
-        timestamp: get_timestamp(),
         cpu_usage: sys.cpus().iter().map(|cpu| cpu.cpu_usage()).collect(),
     };
 

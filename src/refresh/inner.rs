@@ -7,13 +7,6 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
-pub fn get_timestamp() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as u64
-}
-
 pub fn create_system_metric_update_thread<F>(
     state: &State,
     inter: Option<Duration>,

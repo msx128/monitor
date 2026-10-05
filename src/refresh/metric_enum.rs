@@ -1,7 +1,6 @@
 use crate::refresh::{CpuUsageInfo, DisksInfo, MemoryUsageInfo, NetworkInfo};
-use serde::Serialize;
 
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Clone)]
 pub enum Metric {
     Cpu(CpuUsageInfo),
     Disk(DisksInfo),

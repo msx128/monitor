@@ -1,13 +1,11 @@
 use crate::refresh::Metric;
 use crate::refresh::{CpuUsageInfo, DisksInfo, MemoryUsageInfo, NetworkInfo};
-use anyhow::Result;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::watch;
@@ -16,7 +14,7 @@ use tokio::{net::TcpListener, sync::mpsc};
 
 // it is actually pretty convinient have separate big function, I don't need to declare
 // anything in run and just do all things internally
-pub async fn server(rx: mpsc::Receiver<Metric>) -> Result<()> {
+pub async fn server(rx: mpsc::Receiver<Metric>) -> Result<(), std::io::Error> {
     // change localhost to 0.0.0.0
 
     let (w_tx, w_rx) = watch::channel(Snapshot::default());
@@ -69,7 +67,7 @@ struct Labels {
     path: String,
 }
 
-async fn listener(w_rx: watch::Receiver<Snapshot>) -> Result<()> {
+async fn listener(w_rx: watch::Receiver<Snapshot>) -> Result<(), std::io::Error> {
     let mut registry = <Registry>::default();
     let def_lable = default_lable(); // instead of creating new one every time
 
@@ -139,7 +137,12 @@ async fn listener(w_rx: watch::Receiver<Snapshot>) -> Result<()> {
             // idk how all of them &self but ok
 
             let mut body = String::new();
-            encode(&mut body, &registry)?;
+            encode(&mut body, &registry).map_err(|_| {
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "encoding to openmetrics format error",
+                )
+            })?;
 
             let response = format!(
                 "HTTP/1.1 200 OK\r\n\

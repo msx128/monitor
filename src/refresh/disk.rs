@@ -1,8 +1,6 @@
 use crate::refresh::Metric;
 use crate::refresh::inner::State;
 use crate::refresh::inner::Update;
-use crate::refresh::inner::get_timestamp;
-use serde::Serialize;
 use std::sync::Arc;
 use sysinfo::DiskKind;
 use sysinfo::Disks;
@@ -10,19 +8,7 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
-fn serialize_disk_kind<S>(kind: &DiskKind, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    let kind_str = match kind {
-        DiskKind::HDD => "HDD",
-        DiskKind::SSD => "SSD",
-        DiskKind::Unknown(_) => unreachable!("unknown kinds are skipped"),
-    };
-    kind_str.serialize(serializer)
-}
-
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct DisksInfo {
     disks: Vec<DiskInfo>,
 }
@@ -38,15 +24,12 @@ impl DisksInfo {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 struct DiskInfo {
-    timestamp: u64,
-    #[serde(serialize_with = "serialize_disk_kind")]
-    kind: DiskKind,
-    name: String,
+    _kind: DiskKind,
+    _name: String,
     total: u64,
     available: u64,
-    used: u64,
 }
 
 impl Update for DisksInfo {
@@ -89,12 +72,10 @@ async fn get_disks_metric(disks: &Arc<Mutex<Disks>>) -> DisksInfo {
         let available = disk.available_space();
 
         let info = DiskInfo {
-            timestamp: get_timestamp(),
-            kind: disk.kind(),
-            name: disk.name().to_string_lossy().into_owned(),
+            _kind: disk.kind(),
+            _name: disk.name().to_string_lossy().into_owned(),
             total: total,
             available: available,
-            used: total - available,
         };
 
         batch.push(info);

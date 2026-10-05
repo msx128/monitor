@@ -1,17 +1,14 @@
 use crate::refresh::Metric;
 use crate::refresh::inner::State;
 use crate::refresh::inner::Update;
-use crate::refresh::inner::get_timestamp;
-use serde::Serialize;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use sysinfo::Networks;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct NetworkInfo {
-    timestamp: u64,
-    name: String,
+    _name: String,
     received: u64,
     transmited: u64,
 }
@@ -74,8 +71,7 @@ fn get_network_metric(
         Some(v) => v,
     };
     Some(NetworkInfo {
-        timestamp: get_timestamp(),
-        name: network_name.to_string(),
+        _name: network_name.to_string(),
         received: network.received(),
         transmited: network.transmitted(),
     })
