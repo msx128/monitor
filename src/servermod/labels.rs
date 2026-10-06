@@ -1,5 +1,6 @@
 use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
 enum Methods {
     GET,

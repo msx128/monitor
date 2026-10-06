@@ -1,4 +1,4 @@
-use crate::{refresh::*, server::server};
+use crate::{refresh::*, servermod::server};
 use dotenvy;
 use std::env;
 use std::sync::Arc;
@@ -34,19 +34,14 @@ fn is_bool(s: &str) -> bool {
     match env::var(s) {
         Ok(v) => {
             let vref = &*v.to_lowercase(); // same as as_str() 
-            if vref == "f" || vref == "false" {
-                false
-            } else {
-                true
-            } // some strange logic but idk
-            // nah it's fine
+            !(vref == "f" || vref == "false")
         }
         Err(e) => {
             eprintln!(
                 "Error: while passing env: wrong value format it interval variable: {}",
                 e
             );
-            return true;
+            true
         }
     }
 }
@@ -68,7 +63,7 @@ fn get_port() -> String {
             return "9090".to_string();
         }
     };
-    if port_num < 1024 || port_num > 49151 {
+    if !(1024..=49151).contains(&port_num) {
         eprintln!("Port must be between 1204 and 49151 including");
         eprintln!("Setting to default 9090");
         "9090".to_string()
@@ -79,15 +74,11 @@ fn get_port() -> String {
 
 pub async fn run() {
     println!("Starting...");
-    let _ = match dotenvy::dotenv() {
-        Err(e) => {
-            eprintln!(
-                "Error: while passing env: wrong value format it interval variable: {}",
-                e
-            );
-            return ();
-        }
-        Ok(_) => (),
+    if let Err(e) = dotenvy::dotenv() {
+        eprintln!(
+            "Error: while passing env: wrong value format it interval variable: {}",
+            e
+        );
     };
     let state = init();
     let is_debug = is_bool("DEBUG");

@@ -1,7 +1,7 @@
 use crate::refresh::Metric;
-use crate::server::collector::{collector, display};
-use crate::server::get_methods::Snapshot;
-use crate::server::listener::listener;
+use crate::servermod::collector::{collector, display};
+use crate::servermod::get_methods::Snapshot;
+use crate::servermod::listener::listener;
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 

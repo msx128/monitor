@@ -16,11 +16,11 @@ pub struct DisksInfo {
 // change this later
 impl DisksInfo {
     pub fn get_avail(&self) -> u64 {
-        self.disks.iter().next().unwrap().available
+        self.disks.first().unwrap().available
     }
 
     pub fn get_total(&self) -> u64 {
-        self.disks.iter().next().unwrap().total
+        self.disks.first().unwrap().total
     }
 }
 
@@ -74,8 +74,8 @@ async fn get_disks_metric(disks: &Arc<Mutex<Disks>>) -> DisksInfo {
         let info = DiskInfo {
             _kind: disk.kind(),
             _name: disk.name().to_string_lossy().into_owned(),
-            total: total,
-            available: available,
+            total,
+            available,
         };
 
         batch.push(info);

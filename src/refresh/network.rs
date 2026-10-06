@@ -37,7 +37,7 @@ impl Update for NetworkInfo {
                     let mut networks_lock = networks.lock().await;
                     networks_lock.refresh(true);
                     let network_name = find_main_network(&networks_lock);
-                    get_network_metric(&*networks_lock, &network_name)
+                    get_network_metric(&networks_lock, &network_name)
                 };
 
                 let metric = match metric {
@@ -61,15 +61,11 @@ impl Update for NetworkInfo {
 fn get_network_metric(
     networks_lock: &Networks,
     network_name: &Option<&String>,
+    // wtf is this,       ^^
 ) -> Option<NetworkInfo> {
-    let network_name = match network_name {
-        None => return None,
-        Some(v) => v,
-    };
-    let network = match networks_lock.get(&network_name.to_string()) {
-        None => return None,
-        Some(v) => v,
-    };
+    let network_name = network_name.as_ref()?;
+    // &&String is implement to_string but this is wow
+    let network = networks_lock.get(&network_name.to_string())?;
     Some(NetworkInfo {
         _name: network_name.to_string(),
         received: network.received(),
@@ -78,27 +74,23 @@ fn get_network_metric(
 }
 
 fn find_main_network(networks: &Networks) -> Option<&String> {
-    match networks
-        .iter()
-        .filter(|(_k, v)| match v.operational_state() {
-            sysinfo::InterfaceOperationalState::Up => true,
-            sysinfo::InterfaceOperationalState::Dormant => true,
-            sysinfo::InterfaceOperationalState::Unknown => true,
-            _ => false,
-        } && {
+    match networks.iter().find(|(_k, v)| {
+        matches!(
+            v.operational_state(),
+            sysinfo::InterfaceOperationalState::Up
+                | sysinfo::InterfaceOperationalState::Dormant
+                | sysinfo::InterfaceOperationalState::Unknown
+        ) && {
             let addr = v.ip_networks()[0].addr;
             const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
             const LOCALHOST_V6: IpAddr = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-            match addr {
-                LOCALHOST_V4 => false,
-                LOCALHOST_V6 => false,
-                _ => true
-            }
-        }).next() {
-            Some(res) => Some(res.0),
-            None => {
-                eprintln!("Failed to find network");
-                None
-            },
+            !matches!(addr, LOCALHOST_V4 | LOCALHOST_V6)
+        }
+    }) {
+        Some(res) => Some(res.0),
+        None => {
+            eprintln!("Failed to find network");
+            None
+        }
     }
 }

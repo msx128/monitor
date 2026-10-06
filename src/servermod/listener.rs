@@ -1,5 +1,5 @@
-use crate::server::get_methods::*;
-use crate::server::labels::{Labels, default_lable};
+use crate::servermod::get_methods::*;
+use crate::servermod::labels::{Labels, default_lable};
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -55,6 +55,16 @@ pub async fn listener(
     let net_received = Family::<Labels, Gauge>::default();
     registry.register("net_received", "Received bytes", net_received.clone());
 
+    let chunky = Chuncky {
+        cpu_usage,
+        mem_total,
+        mem_available,
+        disk_size,
+        disk_available,
+        net_transmited,
+        net_received,
+    };
+
     let address = if is_localhost {
         format!("127.0.0.1:{}", port)
     } else {
@@ -75,26 +85,12 @@ pub async fn listener(
         if is_metric_get_req {
             http_requests.get_or_create(&def_lable).inc();
 
-            shared_watch_borrow(
-                &w_rx,
-                &cpu_usage,
-                &mem_total,
-                &mem_available,
-                &disk_size,
-                &disk_available,
-                &net_transmited,
-                &net_received,
-                &def_lable,
-            );
+            shared_watch_borrow(&w_rx, &chunky, &def_lable);
             // idk how all of them &self but ok
 
             let mut body = String::new();
-            encode(&mut body, &registry).map_err(|_| {
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "encoding to openmetrics format error",
-                )
-            })?;
+            encode(&mut body, &registry)
+                .map_err(|_| std::io::Error::other("encoding to openmetrics format error"))?;
             // to handle this in other way we could used
             // Box<dyn Error>, but it allocates redudant space and complexity
             // so same as it there is anyhow, but it external dependency for one line of code so
@@ -122,41 +118,48 @@ pub async fn listener(
     }
 }
 
-pub fn shared_watch_borrow(
-    w_rx: &watch::Receiver<Snapshot>,
-    cpu_usage: &Family<Labels, Gauge>,
-    mem_total: &Family<Labels, Gauge>,
-    mem_available: &Family<Labels, Gauge>,
-    disk_size: &Family<Labels, Gauge>,
-    disk_available: &Family<Labels, Gauge>,
-    net_transmited: &Family<Labels, Gauge>,
-    net_received: &Family<Labels, Gauge>,
-    def_lable: &Labels,
-) {
+pub struct Chuncky {
+    cpu_usage: Family<Labels, Gauge>,
+    mem_total: Family<Labels, Gauge>,
+    mem_available: Family<Labels, Gauge>,
+    disk_size: Family<Labels, Gauge>,
+    disk_available: Family<Labels, Gauge>,
+    net_transmited: Family<Labels, Gauge>,
+    net_received: Family<Labels, Gauge>,
+}
+
+pub fn shared_watch_borrow(w_rx: &watch::Receiver<Snapshot>, chunky: &Chuncky, def_lable: &Labels) {
     let borrow = w_rx.borrow().clone();
 
-    cpu_usage
+    chunky
+        .cpu_usage
         .get_or_create(def_lable)
         .set(get_cpu_percentage(&borrow));
 
-    mem_total
+    chunky
+        .mem_total
         .get_or_create(def_lable)
         .set(get_total_mem(&borrow));
-    mem_available
+    chunky
+        .mem_available
         .get_or_create(def_lable)
         .set(get_available_mem(&borrow));
 
-    disk_size
+    chunky
+        .disk_size
         .get_or_create(def_lable)
         .set(get_disk_size(&borrow));
-    disk_available
+    chunky
+        .disk_available
         .get_or_create(def_lable)
         .set(get_disk_available(&borrow));
 
-    net_transmited
+    chunky
+        .net_transmited
         .get_or_create(def_lable)
         .set(get_net_transmited(&borrow));
-    net_received
+    chunky
+        .net_received
         .get_or_create(def_lable)
         .set(get_net_received(&borrow));
 }

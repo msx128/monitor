@@ -1,5 +1,5 @@
 use crate::refresh::Metric;
-use crate::server::get_methods::Snapshot;
+use crate::servermod::get_methods::Snapshot;
 use tokio::sync::{mpsc, watch};
 use tokio::time::{Duration, interval};
 
