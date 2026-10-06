@@ -15,7 +15,7 @@ pub async fn server(
 ) -> Result<(), std::io::Error> {
     // change localhost to 0.0.0.0
     let (w_tx, w_rx) = watch::channel(Snapshot::default());
-    tokio::spawn(collector(rx, w_tx));
+    tokio::spawn(collector(rx, w_tx, is_debug));
 
     if is_debug {
         tokio::spawn(display(w_rx.clone()));

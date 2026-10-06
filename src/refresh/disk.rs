@@ -1,10 +1,6 @@
 use crate::refresh::Metric;
-use crate::refresh::inner::State;
-use crate::refresh::inner::Update;
-use std::sync::Arc;
 use sysinfo::DiskKind;
 use sysinfo::Disks;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
@@ -16,11 +12,17 @@ pub struct DisksInfo {
 // change this later
 impl DisksInfo {
     pub fn get_avail(&self) -> u64 {
-        self.disks.first().unwrap().available
+        match self.disks.first() {
+            None => 0,
+            Some(d) => d.available,
+        }
     }
 
     pub fn get_total(&self) -> u64 {
-        self.disks.first().unwrap().total
+        match self.disks.first() {
+            None => 0,
+            Some(d) => d.total,
+        }
     }
 }
 
@@ -32,10 +34,8 @@ struct DiskInfo {
     available: u64,
 }
 
-impl Update for DisksInfo {
-    fn spawn(state: &State, inter: Option<Duration>, tx: mpsc::Sender<Metric>) {
-        let state_ark = state.inner.clone();
-        let disks = state_ark.disks.clone();
+impl DisksInfo {
+    pub fn spawn(mut disks: Disks, inter: Option<Duration>, tx: mpsc::Sender<Metric>) {
         let mut inter = interval(inter.unwrap_or(Duration::from_mins(30)));
 
         tokio::spawn(async move {
@@ -45,7 +45,7 @@ impl Update for DisksInfo {
                     inter.tick().await;
                 }
 
-                let metric = get_disks_metric(&disks).await;
+                let metric = get_disks_metric(&mut disks).await;
 
                 // println!("{:?}", metric);
                 tx.send(Metric::Disk(metric.clone()))
@@ -58,16 +58,12 @@ impl Update for DisksInfo {
     }
 }
 
-async fn get_disks_metric(disks: &Arc<Mutex<Disks>>) -> DisksInfo {
-    let mut disks_lock = disks.lock().await;
-    disks_lock.refresh(true);
+async fn get_disks_metric(disks: &mut Disks) -> DisksInfo {
+    disks.refresh(true);
 
     let mut batch: Vec<DiskInfo> = Vec::with_capacity(1);
 
-    for disk in disks_lock.iter() {
-        if matches!(disk.kind(), DiskKind::Unknown(_)) {
-            continue;
-        }
+    for disk in disks.iter() {
         let total = disk.total_space();
         let available = disk.available_space();
 

@@ -3,7 +3,7 @@ use dotenvy;
 use std::env;
 use std::sync::Arc;
 use std::time::Duration;
-use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, Networks, RefreshKind, System};
+use sysinfo::{Disks, Networks, System};
 use tokio::sync::{Mutex, mpsc};
 
 // env funcitions used only once so I don't think that possiblity
@@ -64,7 +64,7 @@ fn get_port() -> String {
         }
     };
     if !(1024..=49151).contains(&port_num) {
-        eprintln!("Port must be between 1204 and 49151 including");
+        eprintln!("Port must be between 1024 and 49151 including");
         eprintln!("Setting to default 9090");
         "9090".to_string()
     } else {
@@ -80,39 +80,36 @@ pub async fn run() {
             e
         );
     };
-    let state = init();
     let is_debug = is_bool("DEBUG");
     let is_localhost = is_bool("LOCALHOST");
     let port = get_port();
 
+    let sys = Arc::new(Mutex::new(System::new_all()));
+
     let (tx, rx) = mpsc::channel(4096);
     tokio::spawn(server(rx, is_debug, is_localhost, port));
-    CpuUsageInfo::spawn(&state, get_env_duration_var("CPU_INTERVAL"), tx.clone());
-    NetworkInfo::spawn(&state, get_env_duration_var("NETWORK_INTERVAL"), tx.clone());
-    MemoryUsageInfo::spawn(&state, get_env_duration_var("MEM_INTERVAL"), tx.clone());
-    DisksInfo::spawn(&state, get_env_duration_var("DISK_INTERVAL"), tx);
+    CpuUsageInfo::spawn(
+        sys.clone(),
+        get_env_duration_var("CPU_INTERVAL"),
+        tx.clone(),
+    );
+    MemoryUsageInfo::spawn(
+        sys.clone(),
+        get_env_duration_var("MEM_INTERVAL"),
+        tx.clone(),
+    );
+    NetworkInfo::spawn(
+        Networks::new_with_refreshed_list(),
+        get_env_duration_var("NETWORK_INTERVAL"),
+        tx.clone(),
+    );
+    DisksInfo::spawn(
+        Disks::new_with_refreshed_list(),
+        get_env_duration_var("DISK_INTERVAL"),
+        tx,
+    );
 
     tokio::signal::ctrl_c()
         .await
         .expect("Failed to listen for ctrl-c");
-}
-
-fn init() -> State {
-    let mut sys = System::new_with_specifics(
-        RefreshKind::nothing()
-            .with_cpu(CpuRefreshKind::everything())
-            .with_memory(MemoryRefreshKind::everything()),
-    );
-    sys.refresh_cpu_usage();
-    sys.refresh_memory();
-
-    let state = InnerState {
-        sys: Arc::new(Mutex::new(sys)),
-        disks: Arc::new(Mutex::new(Disks::new_with_refreshed_list())),
-        networks: Arc::new(Mutex::new(Networks::new_with_refreshed_list())),
-    };
-
-    State {
-        inner: Arc::new(state),
-    }
 }

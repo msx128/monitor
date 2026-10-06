@@ -1,22 +1,19 @@
 use crate::refresh::Metric;
 use std::sync::Arc;
-use sysinfo::Disks;
-use sysinfo::Networks;
 use sysinfo::System;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
 
 pub fn create_system_metric_update_thread<F>(
-    state: &State,
+    system: Arc<Mutex<System>>,
     inter: Option<Duration>,
     mut metric_fn: F,
     tx: mpsc::Sender<Metric>,
 ) where
     F: FnMut(&mut sysinfo::System) -> Metric + Send + 'static,
 {
-    let state_arc = state.inner.clone();
-    let sys = state_arc.sys.clone();
+    let sys = system.clone();
     let mut inter = interval(inter.unwrap_or(Duration::from_secs(1)));
 
     tokio::spawn(async move {
@@ -34,16 +31,8 @@ pub fn create_system_metric_update_thread<F>(
     });
 }
 
-pub struct InnerState {
-    pub sys: Arc<Mutex<System>>,
-    pub disks: Arc<Mutex<Disks>>,
-    pub networks: Arc<Mutex<Networks>>,
-}
-
-pub struct State {
-    pub inner: Arc<InnerState>,
-}
-
 pub trait Update {
-    fn spawn(_state: &State, _inter: Option<Duration>, _tx: mpsc::Sender<Metric>) {}
+    fn spawn(_system: Arc<Mutex<System>>, _inter: Option<Duration>, _tx: mpsc::Sender<Metric>) {
+        unimplemented!();
+    }
 }

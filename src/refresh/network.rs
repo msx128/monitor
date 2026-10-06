@@ -1,7 +1,4 @@
 use crate::refresh::Metric;
-use crate::refresh::inner::State;
-use crate::refresh::inner::Update;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use sysinfo::Networks;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, interval};
@@ -23,21 +20,18 @@ impl NetworkInfo {
     }
 }
 
-impl Update for NetworkInfo {
-    fn spawn(state: &State, inter: Option<Duration>, tx: mpsc::Sender<Metric>) {
-        let state_ark = state.inner.clone();
+impl NetworkInfo {
+    pub fn spawn(mut networks: Networks, inter: Option<Duration>, tx: mpsc::Sender<Metric>) {
         let mut inter = interval(inter.unwrap_or(Duration::from_secs(1)));
-        let networks = state_ark.networks.clone();
 
         tokio::spawn(async move {
             loop {
                 inter.tick().await;
 
                 let metric = {
-                    let mut networks_lock = networks.lock().await;
-                    networks_lock.refresh(true);
-                    let network_name = find_main_network(&networks_lock);
-                    get_network_metric(&networks_lock, &network_name)
+                    networks.refresh(true);
+                    let network_name = find_main_network(&networks);
+                    get_network_metric(&networks, &network_name)
                 };
 
                 let metric = match metric {
@@ -80,12 +74,7 @@ fn find_main_network(networks: &Networks) -> Option<&String> {
             sysinfo::InterfaceOperationalState::Up
                 | sysinfo::InterfaceOperationalState::Dormant
                 | sysinfo::InterfaceOperationalState::Unknown
-        ) && {
-            let addr = v.ip_networks()[0].addr;
-            const LOCALHOST_V4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-            const LOCALHOST_V6: IpAddr = IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1));
-            !matches!(addr, LOCALHOST_V4 | LOCALHOST_V6)
-        }
+        ) && v.ip_networks().iter().any(|n| !n.addr.is_loopback())
     }) {
         Some(res) => Some(res.0),
         None => {

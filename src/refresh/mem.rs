@@ -1,8 +1,9 @@
-use crate::refresh::inner::State;
+use std::sync::Arc;
+
 use crate::refresh::inner::create_system_metric_update_thread;
 use crate::refresh::{Metric, Update};
 use sysinfo::System;
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 use tokio::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -22,8 +23,8 @@ impl MemoryUsageInfo {
 }
 
 impl Update for MemoryUsageInfo {
-    fn spawn(state: &State, inter: Option<Duration>, tx: mpsc::Sender<Metric>) {
-        create_system_metric_update_thread(state, inter, create_memory_metric, tx);
+    fn spawn(system: Arc<Mutex<System>>, inter: Option<Duration>, tx: mpsc::Sender<Metric>) {
+        create_system_metric_update_thread(system, inter, create_memory_metric, tx);
     }
 }
 

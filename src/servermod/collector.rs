@@ -3,7 +3,11 @@ use crate::servermod::get_methods::Snapshot;
 use tokio::sync::{mpsc, watch};
 use tokio::time::{Duration, interval};
 
-pub async fn collector(mut m_rx: mpsc::Receiver<Metric>, w_tx: watch::Sender<Snapshot>) {
+pub async fn collector(
+    mut m_rx: mpsc::Receiver<Metric>,
+    w_tx: watch::Sender<Snapshot>,
+    is_debug: bool,
+) {
     while let Some(v) = m_rx.recv().await {
         w_tx.send_modify(|s| match v {
             Metric::Cpu(c) => s.cpu = Some(c),
@@ -11,7 +15,9 @@ pub async fn collector(mut m_rx: mpsc::Receiver<Metric>, w_tx: watch::Sender<Sna
             Metric::Disk(d) => s.disk = Some(d),
             Metric::Network(n) => s.net = Some(n),
         });
-        println!("fetched");
+        if is_debug {
+            println!("fetched");
+        }
     }
 }
 

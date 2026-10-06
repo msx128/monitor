@@ -5,6 +5,7 @@ use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
+use std::sync::Arc;
 use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -45,8 +46,8 @@ pub async fn listener(
     registry.register("disk_size", "Total disk size", disk_size.clone());
     let disk_available = Family::<Labels, Gauge>::default();
     registry.register(
-        "disk_available",
-        "Available disk space",
+        "disk_available_bytes",
+        "Available disk space_bytes",
         disk_available.clone(),
     );
 
@@ -73,48 +74,70 @@ pub async fn listener(
     let listener = TcpListener::bind(address).await?;
     println!("Listening!");
 
+    let load_arc = Arc::new(Load {
+        chunky,
+        w_rx,
+        registry,
+        def_lable,
+        http_requests,
+    });
+
     loop {
-        let (stream, addr) = listener.accept().await?;
+        let (stream, addr) = match listener.accept().await {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Could not get client: {e}");
+                continue;
+            }
+        };
         println!("Connected: {:?}!", addr);
 
-        let mut reader = BufReader::new(stream);
-        let mut request_line = String::new();
-        let _n = reader.read_line(&mut request_line).await?;
+        let load = load_arc.clone();
+        tokio::spawn(async move {
+            let mut reader = BufReader::new(stream);
+            let mut request_line = String::new();
+            if let Err(e) = reader.read_line(&mut request_line).await {
+                eprintln!("Failed to read request line: {e}");
+            }
 
-        let is_metric_get_req = request_line.starts_with("GET /metrics ");
-        if is_metric_get_req {
-            http_requests.get_or_create(&def_lable).inc();
+            let is_metric_get_req = request_line.starts_with("GET /metrics ");
+            if is_metric_get_req {
+                load.http_requests.get_or_create(&load.def_lable).inc();
 
-            shared_watch_borrow(&w_rx, &chunky, &def_lable);
-            // idk how all of them &self but ok
+                shared_watch_borrow(&load.w_rx, &load.chunky, &load.def_lable);
+                // idk how all of them &self but ok
 
-            let mut body = String::new();
-            encode(&mut body, &registry)
-                .map_err(|_| std::io::Error::other("encoding to openmetrics format error"))?;
-            // to handle this in other way we could used
-            // Box<dyn Error>, but it allocates redudant space and complexity
-            // so same as it there is anyhow, but it external dependency for one line of code so
+                let mut body = String::new();
+                if let Err(e) = encode(&mut body, &load.registry) {
+                    eprintln!("encoding to openmetrics format error: {e}");
+                }
 
-            let response = format!(
-                "HTTP/1.1 200 OK\r\n\
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\n\
                 Content-Type: application/openmetrics-text; version=1.0.0; charset=utf-8\r\n\
                 Content-Length: {}\r\n\
                 Connection: Close\r\n\
                 \r\n\
                 {}",
-                body.len(),
-                body,
-            );
+                    body.len(),
+                    body,
+                );
 
-            reader.get_mut().write_all(response.as_bytes()).await?;
-        } else {
-            reader
-                .get_mut()
-                .write_all(
-                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                )
-                .await?;
-        }
+                if let Err(e) = reader.get_mut().write_all(response.as_bytes()).await {
+                    eprintln!("Failed to write to client: {e}");
+                };
+            } else {
+                if let Err(e) = reader
+                    .get_mut()
+                    .write_all(
+                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .await
+                {
+                    eprintln!("Failed to write to client: {e}");
+                };
+            }
+        });
     }
 }
 
@@ -135,7 +158,6 @@ pub fn shared_watch_borrow(w_rx: &watch::Receiver<Snapshot>, chunky: &Chuncky, d
         .cpu_usage
         .get_or_create(def_lable)
         .set(get_cpu_percentage(&borrow));
-
     chunky
         .mem_total
         .get_or_create(def_lable)
@@ -162,4 +184,12 @@ pub fn shared_watch_borrow(w_rx: &watch::Receiver<Snapshot>, chunky: &Chuncky, d
         .net_received
         .get_or_create(def_lable)
         .set(get_net_received(&borrow));
+}
+
+struct Load {
+    chunky: Chuncky,
+    w_rx: watch::Receiver<Snapshot>,
+    registry: Registry,
+    def_lable: Labels,
+    http_requests: Family<Labels, Counter>,
 }
