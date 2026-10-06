@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "monitor"
-version = "1.0.3"
+version = "1.0.0"
 dependencies = [
  "dotenvy",
  "prometheus-client",
