@@ -10,7 +10,11 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 
-pub async fn listener(w_rx: watch::Receiver<Snapshot>) -> Result<(), std::io::Error> {
+pub async fn listener(
+    w_rx: watch::Receiver<Snapshot>,
+    is_localhost: bool,
+    port: &str,
+) -> Result<(), std::io::Error> {
     let mut registry = <Registry>::default();
     let def_lable = default_lable(); // instead of creating new one every time
 
@@ -51,7 +55,12 @@ pub async fn listener(w_rx: watch::Receiver<Snapshot>) -> Result<(), std::io::Er
     let net_received = Family::<Labels, Gauge>::default();
     registry.register("net_received", "Received bytes", net_received.clone());
 
-    let listener = TcpListener::bind("127.0.0.1:9090").await?;
+    let address = if is_localhost {
+        format!("127.0.0.1:{}", port)
+    } else {
+        format!("0.0.0.0:{}", port)
+    };
+    let listener = TcpListener::bind(address).await?;
     println!("Listening!");
 
     loop {

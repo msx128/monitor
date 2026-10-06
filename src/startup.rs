@@ -30,8 +30,8 @@ fn get_env_duration_var(key: &str) -> Option<Duration> {
     }
 }
 
-fn is_debug() -> bool {
-    match env::var("DEBUG") {
+fn is_bool(s: &str) -> bool {
+    match env::var(s) {
         Ok(v) => {
             let vref = &*v.to_lowercase(); // same as as_str() 
             if vref == "f" || vref == "false" {
@@ -51,6 +51,32 @@ fn is_debug() -> bool {
     }
 }
 
+fn get_port() -> String {
+    let var = env::var("PORT");
+    let port = match var {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Reading port env: {e}");
+            "9090".to_string()
+        }
+    };
+    let port_num: i32 = match port.parse() {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Port must be int: {e}");
+            eprintln!("Setting to default 9090");
+            return "9090".to_string();
+        }
+    };
+    if port_num < 1024 || port_num > 49151 {
+        eprintln!("Port must be between 1204 and 49151 including");
+        eprintln!("Setting to default 9090");
+        "9090".to_string()
+    } else {
+        port
+    }
+}
+
 pub async fn run() {
     println!("Starting...");
     let _ = match dotenvy::dotenv() {
@@ -64,10 +90,12 @@ pub async fn run() {
         Ok(_) => (),
     };
     let state = init();
-    let is_debug = is_debug();
+    let is_debug = is_bool("DEBUG");
+    let is_localhost = is_bool("LOCALHOST");
+    let port = get_port();
 
     let (tx, rx) = mpsc::channel(4096);
-    tokio::spawn(server(rx, is_debug));
+    tokio::spawn(server(rx, is_debug, is_localhost, port));
     CpuUsageInfo::spawn(&state, get_env_duration_var("CPU_INTERVAL"), tx.clone());
     NetworkInfo::spawn(&state, get_env_duration_var("NETWORK_INTERVAL"), tx.clone());
     MemoryUsageInfo::spawn(&state, get_env_duration_var("MEM_INTERVAL"), tx.clone());
