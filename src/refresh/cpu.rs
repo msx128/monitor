@@ -12,11 +12,10 @@ pub struct CpuUsageInfo {
 }
 
 impl CpuUsageInfo {
-    pub fn get_cpu_usage_as_i64(&self) -> i64 {
-        let s: f32 = self.cpu_usage.iter().sum();
-        let len = self.cpu_usage.len() as f32;
-        let res = s / len;
-        res as i64
+    pub fn get_cpu_average(&self) -> f64 {
+        let s: f64 = self.cpu_usage.iter().sum::<f32>() as f64;
+        let len = self.cpu_usage.len() as f64;
+        s / len / 100.0
     }
 }
 

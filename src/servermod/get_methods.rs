@@ -8,11 +8,11 @@ pub struct Snapshot {
     pub net: Option<NetworkInfo>,
 }
 
-pub fn get_cpu_percentage(snap: &Snapshot) -> i64 {
+pub fn get_cpu_percentage(snap: &Snapshot) -> f64 {
     let Some(cpu) = snap.cpu.as_ref() else {
-        return 0;
+        return 0.0;
     };
-    cpu.get_cpu_usage_as_i64()
+    cpu.get_cpu_average()
 }
 
 pub fn get_total_mem(snap: &Snapshot) -> i64 {

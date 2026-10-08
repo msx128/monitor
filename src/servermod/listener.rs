@@ -1,11 +1,12 @@
 use crate::servermod::get_methods::*;
-use crate::servermod::labels::{Labels, default_lable};
+use crate::servermod::labels::*;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 use tokio::io::BufReader;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -17,7 +18,6 @@ pub async fn listener(
     port: &str,
 ) -> Result<(), std::io::Error> {
     let mut registry = <Registry>::default();
-    let def_lable = default_lable(); // instead of creating new one every time
 
     let chunky = register_and_get_metrics(&mut registry);
 
@@ -33,7 +33,6 @@ pub async fn listener(
         chunky,
         w_rx,
         registry,
-        def_lable,
     });
 
     loop {
@@ -53,95 +52,110 @@ pub async fn listener(
 }
 
 pub struct Chuncky {
-    cpu_usage: Family<Labels, Gauge>,
-    mem_total: Family<Labels, Gauge>,
-    mem_available: Family<Labels, Gauge>,
-    disk_size: Family<Labels, Gauge>,
-    disk_available: Family<Labels, Gauge>,
-    net_transmited: Family<Labels, Gauge>,
-    net_received: Family<Labels, Gauge>,
-    http_requests: Family<Labels, Counter>,
+    cpu_usage: Gauge<f64, AtomicU64>,
+    mem_total: Gauge,
+    mem_available: Gauge,
+    disk_size: Family<DiskLabel, Gauge>,
+    disk_available: Family<DiskLabel, Gauge>,
+    net_transmited: Family<NetLabel, Counter>,
+    net_received: Family<NetLabel, Counter>,
+    http_requests: Family<HttpLabel, Counter>,
 }
 
-pub fn shared_watch_borrow(w_rx: &watch::Receiver<Snapshot>, chunky: &Chuncky, def_lable: &Labels) {
+pub fn shared_watch_borrow(w_rx: &watch::Receiver<Snapshot>, chunky: &Chuncky) {
     let borrow = w_rx.borrow().clone();
 
-    chunky
-        .cpu_usage
-        .get_or_create(def_lable)
-        .set(get_cpu_percentage(&borrow));
-    chunky
-        .mem_total
-        .get_or_create(def_lable)
-        .set(get_total_mem(&borrow));
-    chunky
-        .mem_available
-        .get_or_create(def_lable)
-        .set(get_available_mem(&borrow));
+    chunky.cpu_usage.set(get_cpu_percentage(&borrow));
+
+    chunky.mem_total.set(get_total_mem(&borrow));
+    chunky.mem_available.set(get_available_mem(&borrow));
 
     chunky
         .disk_size
-        .get_or_create(def_lable)
+        .get_or_create(&DiskLabel {
+            mountpoint: "/".to_string(),
+        })
         .set(get_disk_size(&borrow));
     chunky
         .disk_available
-        .get_or_create(def_lable)
+        .get_or_create(&DiskLabel {
+            mountpoint: "/".to_string(),
+        })
         .set(get_disk_available(&borrow));
 
     chunky
         .net_transmited
-        .get_or_create(def_lable)
-        .set(get_net_transmited(&borrow));
+        .get_or_create(&NetLabel {
+            interface: "some".to_string(),
+        })
+        .inc_by(get_net_transmited(&borrow) as u64);
     chunky
         .net_received
-        .get_or_create(def_lable)
-        .set(get_net_received(&borrow));
+        .get_or_create(&NetLabel {
+            interface: "some".to_string(),
+        })
+        .inc_by(get_net_received(&borrow) as u64);
 }
 
 struct Load {
     chunky: Chuncky,
     w_rx: watch::Receiver<Snapshot>,
     registry: Registry,
-    def_lable: Labels,
 }
 
 fn register_and_get_metrics(registry: &mut Registry) -> Chuncky {
-    let http_requests = Family::<Labels, Counter>::default();
+    let http_requests = Family::<HttpLabel, Counter>::default();
     registry.register(
         "http_requests",
         "Number of HTTP requests received",
         http_requests.clone(),
     );
 
-    let cpu_usage = Family::<Labels, Gauge>::default();
-    registry.register("cpu_usage_ratio", "Percent of cpu usage", cpu_usage.clone());
-
-    let mem_total = Family::<Labels, Gauge>::default();
+    let cpu_usage = Gauge::<f64, AtomicU64>::default();
     registry.register(
-        "mem_total_bytes",
+        "monitor_cpu_usage_ratio",
+        "Average cpu usage across all cores (0 to 1)",
+        cpu_usage.clone(),
+    );
+
+    let mem_total = Gauge::default();
+    registry.register(
+        "monitor_memory_total_bytes",
         "Total of memory bytes",
         mem_total.clone(),
     );
-    let mem_available = Family::<Labels, Gauge>::default();
+    let mem_available = Gauge::default();
     registry.register(
-        "mem_available_bytes",
+        "monitor_memory_available_bytes",
         "Available memory bytes",
         mem_available.clone(),
     );
 
-    let disk_size = Family::<Labels, Gauge>::default();
-    registry.register("disk_size", "Total disk size", disk_size.clone());
-    let disk_available = Family::<Labels, Gauge>::default();
+    let disk_size = Family::<DiskLabel, Gauge>::default();
     registry.register(
-        "disk_available_bytes",
+        "monitor_disk_total_bytes",
+        "Total disk size",
+        disk_size.clone(),
+    );
+    let disk_available = Family::<DiskLabel, Gauge>::default();
+    registry.register(
+        "monitor_disk_available_bytes",
         "Available disk space_bytes",
         disk_available.clone(),
     );
 
-    let net_transmited = Family::<Labels, Gauge>::default();
-    registry.register("net_transmited", "Transmited bytes", net_transmited.clone());
-    let net_received = Family::<Labels, Gauge>::default();
-    registry.register("net_received", "Received bytes", net_received.clone());
+    let net_transmited = Family::<NetLabel, Counter>::default();
+    registry.register(
+        "monitor_network_transmited",
+        "Transmited bytes since boot",
+        net_transmited.clone(),
+    );
+    let net_received = Family::<NetLabel, Counter>::default();
+    registry.register(
+        "monitor_network_received",
+        "Received bytes since boot",
+        net_received.clone(),
+    );
 
     Chuncky {
         cpu_usage,
@@ -166,10 +180,13 @@ async fn handler(stream: TcpStream, load: Arc<Load>) {
     if is_metric_get_req {
         load.chunky
             .http_requests
-            .get_or_create(&load.def_lable)
+            .get_or_create(&HttpLabel {
+                method: Methods::GET,
+                path: "/metrics".to_string(),
+            })
             .inc();
 
-        shared_watch_borrow(&load.w_rx, &load.chunky, &load.def_lable);
+        shared_watch_borrow(&load.w_rx, &load.chunky);
         // idk how all of them &self but ok
 
         let mut body = String::new();
