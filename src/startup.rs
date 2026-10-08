@@ -87,7 +87,12 @@ pub async fn run() {
     let sys = Arc::new(Mutex::new(System::new_all()));
 
     let (tx, rx) = mpsc::channel(4096);
-    tokio::spawn(server(rx, is_debug, is_localhost, port));
+    let disks = Disks::new_with_refreshed_list();
+    let mountpoints: Vec<String> = disks
+        .iter()
+        .map(|d| d.name().to_string_lossy().to_string())
+        .collect();
+    tokio::spawn(server(rx, is_debug, is_localhost, port, mountpoints));
     CpuUsageInfo::spawn(
         sys.clone(),
         get_env_duration_var("CPU_INTERVAL"),
@@ -103,11 +108,7 @@ pub async fn run() {
         get_env_duration_var("NETWORK_INTERVAL"),
         tx.clone(),
     );
-    DisksInfo::spawn(
-        Disks::new_with_refreshed_list(),
-        get_env_duration_var("DISK_INTERVAL"),
-        tx,
-    );
+    DisksInfo::spawn(disks, get_env_duration_var("DISK_INTERVAL"), tx);
 
     tokio::signal::ctrl_c()
         .await

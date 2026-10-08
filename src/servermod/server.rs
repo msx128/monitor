@@ -12,6 +12,7 @@ pub async fn server(
     is_debug: bool,
     is_localhost: bool,
     port: String,
+    mountpoints: Vec<String>,
 ) -> Result<(), std::io::Error> {
     // change localhost to 0.0.0.0
     let (w_tx, w_rx) = watch::channel(Snapshot::default());
@@ -21,7 +22,7 @@ pub async fn server(
         tokio::spawn(display(w_rx.clone()));
     }
 
-    listener(w_rx, is_localhost, &port).await?;
+    listener(w_rx, is_localhost, &port, mountpoints).await?;
 
     Ok(())
 }

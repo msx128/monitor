@@ -5,12 +5,16 @@ use tokio::time::{Duration, interval};
 
 #[derive(Debug, Clone)]
 pub struct NetworkInfo {
-    _name: String,
+    name: String,
     received: u64,
     transmited: u64,
 }
 
 impl NetworkInfo {
+    pub fn get_name(&self) -> String {
+        self.name.clone()
+    }
+
     pub fn get_transmited(&self) -> u64 {
         self.transmited
     }
@@ -61,7 +65,7 @@ fn get_network_metric(
     // &&String is implement to_string but this is wow
     let network = networks_lock.get(&network_name.to_string())?;
     Some(NetworkInfo {
-        _name: network_name.to_string(),
+        name: network_name.to_string(),
         received: network.received(),
         transmited: network.transmitted(),
     })

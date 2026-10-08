@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::refresh::Metric;
 use sysinfo::DiskKind;
 use sysinfo::Disks;
@@ -9,27 +11,26 @@ pub struct DisksInfo {
     disks: Vec<DiskInfo>,
 }
 
-// change this later
 impl DisksInfo {
-    pub fn get_avail(&self) -> u64 {
-        match self.disks.first() {
-            None => 0,
-            Some(d) => d.available,
-        }
+    pub fn get_disks_total_map_i64(&self) -> HashMap<String, i64> {
+        self.disks
+            .iter()
+            .map(|d| (d.name.clone(), d.total as i64))
+            .collect()
     }
 
-    pub fn get_total(&self) -> u64 {
-        match self.disks.first() {
-            None => 0,
-            Some(d) => d.total,
-        }
+    pub fn get_disks_available_map_i64(&self) -> HashMap<String, i64> {
+        self.disks
+            .iter()
+            .map(|d| (d.name.clone(), d.available as i64))
+            .collect()
     }
 }
 
 #[derive(Debug, Clone)]
 struct DiskInfo {
     _kind: DiskKind,
-    _name: String,
+    name: String,
     total: u64,
     available: u64,
 }
@@ -69,7 +70,7 @@ async fn get_disks_metric(disks: &mut Disks) -> DisksInfo {
 
         let info = DiskInfo {
             _kind: disk.kind(),
-            _name: disk.name().to_string_lossy().into_owned(),
+            name: disk.name().to_string_lossy().into_owned(),
             total,
             available,
         };
