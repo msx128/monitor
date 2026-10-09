@@ -1,2 +1,6 @@
 /target
 .env
+
+# for local testing
+Containerfile
+monitor
